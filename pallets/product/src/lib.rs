@@ -5,6 +5,8 @@
 /// <https://docs.substrate.io/reference/frame-pallets/>
 pub use pallet::*;
 
+pub mod types;
+
 #[cfg(test)]
 mod mock;
 
@@ -20,8 +22,7 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
-	use scale_info::TypeInfo;
-	use codec::MaxEncodedLen;
+	use crate::types::{Product, ProductName};
 
 
 	#[pallet::pallet]
@@ -36,31 +37,6 @@ pub mod pallet {
 		
 	}
 	
-	pub type ProductName = [u8;1024];
-
-	#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo,MaxEncodedLen)]
-	#[scale_info(skip_type_params(T))]
-	#[codec(mel_bound())]
-	pub struct Product<T:Config>{
-    	// The name of the product
-    	name:ProductName,
-    	// The price of the product
-    	price: u64,
-    	// The ID of the user who added the product
-    	owner: T::AccountId,
-		
-	}
-
-	impl<T:Config> Product<T> {
-		pub fn new(name: ProductName, price: u64, owner: T::AccountId)-> Self{
-			Product::<T>{
-				name,
-				price,
-				owner,
-			}
-		}
-	}
-
 
 	#[pallet::storage]
 	#[pallet::getter(fn get_authorized_user )]
@@ -73,11 +49,11 @@ pub mod pallet {
 	pub(super) type Products<T:Config>= StorageMap<_, Blake2_128,u128,Product<T>, 
     OptionQuery>;
 
-
 	//global counter for product
 	#[pallet::storage]
 	#[pallet::getter(fn get_product_counter )]	
 	pub(super) type ProductCounter<T> = StorageValue<_, u128, OptionQuery>;
+
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -89,9 +65,7 @@ pub mod pallet {
 		//event when new product is registered
 		NewProduct{
 			id : u128, 
-			name: ProductName, 
-			price: u64,
-			owner: T::AccountId
+			product: Product<T>,
 		},
 	}
 
@@ -146,9 +120,7 @@ pub mod pallet {
 			
 			Self::deposit_event(Event::NewProduct{
 				id: product_counter,
-				name:p.name,
-				price:p.price,
-				owner:p.owner
+				product: p,
 			});
 			Ok(())
 
