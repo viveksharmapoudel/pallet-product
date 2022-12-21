@@ -36,7 +36,7 @@ pub mod pallet {
 		
 	}
 	
-	pub type ProductName = [u8; 32];
+	pub type ProductName = [u8;1024];
 
 	#[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo,MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
@@ -67,12 +67,14 @@ pub mod pallet {
 	pub(super) type AuthorizedUsers<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, bool, 
     ValueQuery >;
 
+
 	#[pallet::storage]
 	#[pallet::getter(fn get_product_info )]
 	pub(super) type Products<T:Config>= StorageMap<_, Blake2_128,u128,Product<T>, 
     OptionQuery>;
 
 
+	//global counter for product
 	#[pallet::storage]
 	#[pallet::getter(fn get_product_counter )]	
 	pub(super) type ProductCounter<T> = StorageValue<_, u128, OptionQuery>;
@@ -80,9 +82,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
+
+		//even when new user is registered
 		NewAuthorizedUser(T::AccountId),
+
+		//event when new product is registered
 		NewProduct{
 			id : u128, 
 			name: ProductName, 
@@ -101,11 +105,6 @@ pub mod pallet {
 
 		AuthorizedUserExist,
 
-		NotAuthorizedUser,
-
-		IncompleteProduct,
-
-		ProductDoesnotExist,
 	}
 
 
@@ -114,8 +113,10 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn add_authorized_user(origin: OriginFor<T>, new_user: T::AccountId) -> DispatchResult {
-			
-			Self::ensure_root_or_authorized(origin)?;
+
+			if !ensure_root(origin.clone()).is_ok() {
+				Self::ensure_authorized(origin)?;
+			}
 
 			ensure!(!AuthorizedUsers::<T>::contains_key(&new_user),Error::<T>::AuthorizedUserExist);
 
@@ -156,18 +157,6 @@ pub mod pallet {
 
 
 	impl <T:Config> Pallet<T> {
-
-		pub fn ensure_root_or_authorized(origin: OriginFor<T>) -> DispatchResult {
-
-
-			let is_root = ensure_root(origin.clone()).is_ok();
-			let is_authorized = {
-				let signed = ensure_signed(&origin);
-				signed.is_ok() && AuthorizedUsers::<T>::contains_key(&signed);
-			};
-			ensure!(is_root  , DispatchError::BadOrigin);
-			Ok(())
-		}
 
 		pub fn ensure_authorized(origin: OriginFor<T>)-> DispatchResult{
 			let sender= ensure_signed(origin)?;
