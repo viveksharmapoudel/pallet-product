@@ -1,12 +1,13 @@
 use crate as product;
 
+use frame_support::BoundedVec;
 use frame_system::Config;
 use scale_info::TypeInfo;
 use codec::{MaxEncodedLen, Encode, Decode};
+use sp_core::ConstU32;
 
 
-
-pub type ProductName = [u8;1024];
+pub type ProductName = BoundedVec<u8, ConstU32<10>>;
 
 
 #[derive(Encode, Decode, Eq, PartialEq, Clone, TypeInfo,MaxEncodedLen)]
