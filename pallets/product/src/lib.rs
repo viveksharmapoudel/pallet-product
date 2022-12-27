@@ -19,10 +19,10 @@ mod benchmarking;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{pallet_prelude::*};
+	use frame_support::{pallet_prelude::*, pallet};
 	use frame_system::pallet_prelude::*;
 
-	use crate::types::{Product, ProductName};
+	use crate::types::{Product, ProductName, ProductPositionEnum};
 
 
 	#[pallet::pallet]
@@ -67,6 +67,16 @@ pub mod pallet {
 			id : u128, 
 			product: Product<T>,
 		},
+
+		UpdatePosition{
+			id: u128,
+			product:Product<T>,
+		},
+
+		BuyProduct{
+			id: u128,
+			product:Product<T>,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -78,6 +88,10 @@ pub mod pallet {
 		DeniedOperation,
 
 		AuthorizedUserExist,
+
+		ProductDonotExist,
+
+		ProductFinished,
 
 	}
 
@@ -103,12 +117,11 @@ pub mod pallet {
 		/// An example dispatchable that may throw a custom error.
 		#[pallet::call_index(1)]
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
-		pub fn add_product(origin: OriginFor<T>, name: ProductName, price: u64 ) -> DispatchResult {
+		pub fn add_product(origin: OriginFor<T>, name: ProductName, price: u64, count: u128, ) -> DispatchResult {
 
 			Self::ensure_authorized(origin.clone())?;
 			let sender = ensure_signed(origin)?;
-			let p = Product::<T>::new(name , price , sender);
-
+			let p = Product::<T>::new(name , price , sender, count, ProductPositionEnum::Manufacture);
 
 			let product_counter = match Self::get_product_counter() {
 				Some(v)=> v+1,
@@ -125,6 +138,48 @@ pub mod pallet {
 			Ok(())
 
 		}
+	
+
+		#[pallet::call_index(2)]
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+		pub fn update_position(origin: OriginFor<T>,id: u128,  position: ProductPositionEnum)-> DispatchResult{
+
+			Self::ensure_authorized(origin.clone())?;
+
+			ensure!(Products::<T>::contains_key(id),Error::<T>::ProductDonotExist);
+			let mut p:Product<T> =  Self::get_product_info(id).unwrap();
+			
+			p.set_position(position);
+			<Products<T>>::insert(id,&p);
+			Self::deposit_event(Event::UpdatePosition{
+				id:id,
+				product: p,
+			});
+			Ok(())
+		}
+
+		#[pallet::call_index(3)]
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+		pub fn buy_product(origin:OriginFor<T>, id: u128 )-> DispatchResult{
+
+			let sender= ensure_signed(origin)?;
+
+			ensure!(Products::<T>::contains_key(id),Error::<T>::ProductDonotExist);
+			let mut p:Product<T> =  Self::get_product_info(id).unwrap();
+			
+			ensure!(p.get_count()>0 , Error::<T>::ProductFinished);
+			let c= p.get_count().clone();
+			p.set_count(c-1);
+
+			<Products<T>>::insert(id,&p);
+			Self::deposit_event(Event::BuyProduct{
+				id:id,
+				product: p,
+			});
+
+			Ok(())
+		}
+
 	}
 
 
