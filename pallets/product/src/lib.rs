@@ -106,7 +106,8 @@ pub mod pallet {
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
 		pub fn add_authorized_user(origin: OriginFor<T>, new_user: T::AccountId) -> DispatchResult {
 
-			if !ensure_root(origin.clone()).is_ok() {
+			let is_root = Self::ensure_root_or_server(origin.clone()).is_ok();
+			if  !is_root {
 				Self::ensure_authorized(origin)?;
 			}
 
@@ -125,7 +126,7 @@ pub mod pallet {
 
 			Self::ensure_authorized(origin.clone())?;
 			let sender = ensure_signed(origin)?;
-			let p = Product::<T>::new(name , price , sender, ProductPositionEnum::Manufacture, false);
+			let p = Product::<T>::new(name , price , sender, ProductPositionEnum::Manufacture);
 
 			let product_counter = match Self::get_product_counter() {
 				Some(v)=> v+1,
@@ -181,8 +182,9 @@ pub mod pallet {
 				Error::<T>::NotReadyForRetailer
 			);
 
-			if(p.get_is_sold()&& !p.get_resale() ){
-				Err(Error::<T>::NotInResaleList);
+			// sold but not in resale list
+			if p.get_is_sold() && !p.get_resale() {
+				return Err(Error::<T>::NotInResaleList.into());
 			}
 
 			// check sender balance greater than min balance
@@ -251,12 +253,26 @@ pub mod pallet {
 
 
 	impl <T:Config> Pallet<T> {
+
+		// ensure root or is server account 	
+		pub fn ensure_root_or_server(origin: OriginFor<T>) -> DispatchResult {
+			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_offchain = {
+				let signed = ensure_signed(origin);
+				signed.is_ok() && signed.ok() == Self::get_product_owner_account()
+			};
+
+			ensure!(is_root || is_offchain, DispatchError::BadOrigin);
+			Ok(())
+		}
+
+
 		pub fn ensure_authorized(origin: OriginFor<T>)-> DispatchResult{
 			let sender= ensure_signed(origin)?;
 			ensure!(AuthorizedUsers::<T>::contains_key(&sender) , DispatchError::BadOrigin);
 			Ok(())
 		}
-		
+
 	}
 
 	//genesis_pallet_account
