@@ -36,7 +36,7 @@ where
 pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 	(get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
 }
-const  product_owner_account: [u8; 32] =
+const  PRODUCT_OWNER_ACCOUNT: [u8; 32] =
 hex!["eea38549ab839643085bc97194cd4701810f35255f2117c356ba629f4146461d"];
 
 pub fn development_config() -> Result<ChainSpec, String> {
@@ -160,7 +160,7 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		product_module: ProductModuleConfig {
-			product_owner_account:product_owner_account.into(),
+			product_owner_account:PRODUCT_OWNER_ACCOUNT.into(),
 		},
 	}
 }

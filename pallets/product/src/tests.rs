@@ -24,6 +24,14 @@ fn it_works_for_add_authorized_user() {
 }
 
 #[test]
+fn add_authorized_user_withOwner_account(){
+    minimal_test_ext().execute_with(||{
+		assert_ok!(ProductModule::add_authorized_user(RuntimeOrigin::signed(TEST_OWNER_ACCOUNT), 2));
+        assert_eq!(ProductModule::get_authorized_user(2),true);
+    })
+}
+
+#[test]
 fn it_works_product_add() {
 	new_test_ext().execute_with(  || {
 		

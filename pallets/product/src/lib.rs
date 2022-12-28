@@ -20,8 +20,8 @@ mod benchmarking;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{pallet_prelude::*, traits::{Currency, ReservableCurrency, LockableCurrency, ExistenceRequirement}};
-	use frame_system::{pallet_prelude::*, Origin};
+	use frame_support::{pallet_prelude::*, traits::{Currency,  ExistenceRequirement}};
+	use frame_system::{pallet_prelude::*,};
 	use crate::types::{Product, ProductName, ProductPositionEnum, AccountIdOf, BalanceOf};
 	use hex_literal::hex;
 
@@ -211,6 +211,9 @@ pub mod pallet {
 
 			//set_sold_property
 			p.set_is_sold(true);
+
+			//set_resale_false
+			p.set_resale(false);
 
 			<Products<T>>::insert(id,&p);
 			Self::deposit_event(Event::Product{
