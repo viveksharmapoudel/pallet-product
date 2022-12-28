@@ -1,12 +1,13 @@
 use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
-	SystemConfig, WASM_BINARY,
+	SystemConfig, WASM_BINARY, ProductModuleConfig
 };
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+ use hex_literal::hex;
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -35,9 +36,12 @@ where
 pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 	(get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
 }
+const  product_owner_account: [u8; 32] =
+hex!["eea38549ab839643085bc97194cd4701810f35255f2117c356ba629f4146461d"];
 
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+
 
 	Ok(ChainSpec::from_genesis(
 		// Name
@@ -73,11 +77,14 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		None,
 		// Extensions
 		None,
+
+
 	))
 }
 
 pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+
 
 	Ok(ChainSpec::from_genesis(
 		// Name
@@ -152,5 +159,8 @@ fn testnet_genesis(
 			key: Some(root_key),
 		},
 		transaction_payment: Default::default(),
+		product_module: ProductModuleConfig {
+			product_owner_account:product_owner_account.into(),
+		},
 	}
 }

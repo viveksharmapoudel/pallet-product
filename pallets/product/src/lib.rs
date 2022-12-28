@@ -17,12 +17,13 @@ mod tests;
 mod benchmarking;
 
 
+
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{pallet_prelude::*, pallet};
-	use frame_system::pallet_prelude::*;
-
-	use crate::types::{Product, ProductName, ProductPositionEnum};
+	use frame_support::{pallet_prelude::*, traits::{Currency, ReservableCurrency, LockableCurrency, ExistenceRequirement}};
+	use frame_system::{pallet_prelude::*, Origin};
+	use crate::types::{Product, ProductName, ProductPositionEnum, AccountIdOf, BalanceOf};
+	use hex_literal::hex;
 
 
 	#[pallet::pallet]
@@ -31,12 +32,14 @@ pub mod pallet {
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config  {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		type Currency: Currency<AccountIdOf<Self>>;
 		
 	}
-	
+
 
 	#[pallet::storage]
 	#[pallet::getter(fn get_authorized_user )]
@@ -53,6 +56,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn get_product_counter )]	
 	pub(super) type ProductCounter<T> = StorageValue<_, u128, OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn get_product_owner_account)]
+	pub(super) type ProductOwnerAccount<T: Config> = StorageValue<_, AccountIdOf<T>, OptionQuery>;
 
 
 	#[pallet::event]
@@ -93,6 +100,21 @@ pub mod pallet {
 
 		ProductFinished,
 
+		NotReadyForRetailer,
+
+		ProductIsSold,
+
+		InsufficientBalance,
+
+
+		ServerAccountNotFound,
+
+		ItemSold,
+
+		NotInResaleList,
+
+		ProductIsNotSold,
+
 	}
 
 
@@ -117,11 +139,11 @@ pub mod pallet {
 		/// An example dispatchable that may throw a custom error.
 		#[pallet::call_index(1)]
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
-		pub fn add_product(origin: OriginFor<T>, name: ProductName, price: u64, count: u128, ) -> DispatchResult {
+		pub fn add_product(origin: OriginFor<T>, name: ProductName, price: BalanceOf<T>) -> DispatchResult {
 
 			Self::ensure_authorized(origin.clone())?;
 			let sender = ensure_signed(origin)?;
-			let p = Product::<T>::new(name , price , sender, count, ProductPositionEnum::Manufacture);
+			let p = Product::<T>::new(name , price , sender, ProductPositionEnum::Manufacture, false);
 
 			let product_counter = match Self::get_product_counter() {
 				Some(v)=> v+1,
@@ -147,7 +169,10 @@ pub mod pallet {
 			Self::ensure_authorized(origin.clone())?;
 
 			ensure!(Products::<T>::contains_key(id),Error::<T>::ProductDonotExist);
+
 			let mut p:Product<T> =  Self::get_product_info(id).unwrap();
+
+			ensure!(!p.get_is_sold(), Error::<T>::ProductIsSold);
 			
 			p.set_position(position);
 			<Products<T>>::insert(id,&p);
@@ -160,16 +185,48 @@ pub mod pallet {
 
 		#[pallet::call_index(3)]
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
-		pub fn buy_product(origin:OriginFor<T>, id: u128 )-> DispatchResult{
+		pub fn buy_product(origin:OriginFor<T>, id: u128 )-> DispatchResult {
 
-			let sender= ensure_signed(origin)?;
+			let buyer = ensure_signed(origin)?;
 
-			ensure!(Products::<T>::contains_key(id),Error::<T>::ProductDonotExist);
-			let mut p:Product<T> =  Self::get_product_info(id).unwrap();
+			//check if product exists
+			let mut p:Product<T> =  Self::get_product_info(id).ok_or(Error::<T>::ProductDonotExist)?;
+
+
+			//product can be bought only after ready for retailer
+			ensure!(p.get_position() == 
+				ProductPositionEnum::Retailer, 
+				Error::<T>::NotReadyForRetailer
+			);
+
+			//ensure not sold 
+			ensure!(!p.get_is_sold(), Error::<T>::ItemSold);
+
 			
-			ensure!(p.get_count()>0 , Error::<T>::ProductFinished);
-			let c= p.get_count().clone();
-			p.set_count(c-1);
+			// check sender balance greater than min balance
+			ensure!(
+				<T as Config>::Currency::free_balance(&buyer) >
+				p.get_price() + <T as Config>::Currency::minimum_balance(), 
+				Error::<T>::InsufficientBalance
+			);
+
+			// check if owner account exists
+			let owner_account  = Self::get_product_owner_account().
+					ok_or(Error::<T>::ServerAccountNotFound)?;
+			
+			
+			// transfer fund to product_owner_account
+			<T as Config>::Currency::transfer(&buyer, 
+							&owner_account, 
+							p.get_price(), 
+							ExistenceRequirement::AllowDeath
+			)?;
+
+			//change product owner
+			p.set_owner(buyer);
+
+			//set_sold_property
+			p.set_is_sold(true);
 
 			<Products<T>>::insert(id,&p);
 			Self::deposit_event(Event::BuyProduct{
@@ -180,11 +237,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+
+		
+
 	}
 
 
 	impl <T:Config> Pallet<T> {
-
 		pub fn ensure_authorized(origin: OriginFor<T>)-> DispatchResult{
 			let sender= ensure_signed(origin)?;
 			ensure!(AuthorizedUsers::<T>::contains_key(&sender) , DispatchError::BadOrigin);
@@ -192,5 +251,33 @@ pub mod pallet {
 		}
 		
 	}
+
+	//genesis_pallet_account
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub product_owner_account: AccountIdOf<T>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			let product_owner_account_hex =
+				hex!["eea38549ab839643085bc97194cd4701810f35255f2117c356ba629f4146461d"];
+			let product_owner_account =
+				AccountIdOf::<T>::decode(&mut &product_owner_account_hex[..]).unwrap();
+
+			Self {
+				product_owner_account,
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			ProductOwnerAccount::<T>::put(&self.product_owner_account);
+		}
+	}
+
 
 }

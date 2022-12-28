@@ -1,9 +1,8 @@
 use core::{ str::Bytes};
 
-use crate::{mock::{*, self}, Error, types::{ProductName, self, Product, ProductPositionEnum}};
-use frame_support::{assert_noop, assert_ok, BoundedVec, assert_err};
-use frame_system::Config;
-use sp_core::ConstU32;
+use crate::{mock::{*, self}, Error, types::{ self, Product, ProductPositionEnum}};
+use frame_support::{ assert_ok, BoundedVec, assert_err};
+use crate as pallet_product;
 
 
 #[test]
@@ -32,8 +31,8 @@ fn it_works_product_add() {
 		assert_ok!(ProductModule::add_authorized_user(RuntimeOrigin::root(), 1));
 
         let mut vec = BoundedVec::try_from(Vec::from("other")).unwrap();
-        let p =  types::Product::<Test>::new(vec.clone(),4,1,3, types::ProductPositionEnum::Manufacture);
-        assert_ok!(ProductModule::add_product(RuntimeOrigin::signed(1), vec, 4, 3 ));
+        let p =  types::Product::<Test>::new(vec.clone(),4,1, types::ProductPositionEnum::Manufacture, false);
+        assert_ok!(ProductModule::add_product(RuntimeOrigin::signed(1), vec, 4 ));
         let savedP:Product<Test>=ProductModule::get_product_info(1).unwrap(); 
         assert_eq!(savedP, p);
         
@@ -47,25 +46,64 @@ fn it_works_product_position_update(){
         assert_ok!(ProductModule::add_authorized_user(RuntimeOrigin::root(), 1));
         let mut vec = BoundedVec::try_from(Vec::from("other")).unwrap();
         
-        assert_ok!(ProductModule::add_product(RuntimeOrigin::signed(1), vec, 4, 3 ));
-        
+        assert_ok!(ProductModule::add_product(RuntimeOrigin::signed(1), vec, 4));
+
         assert_ok!(ProductModule::update_position(RuntimeOrigin::signed(1),1, ProductPositionEnum::Distribution));
         let mut p: Product<Test> = ProductModule::get_product_info(1).unwrap();
-        assert_eq!(p.get_position(), ProductPositionEnum::Distribution);
+        assert_eq!(p.get_position(), ProductPositionEnum::Retailer);
     })
 }
 
 #[test]
-fn it_works_product_buy(){
-    new_test_ext().execute_with(||{
-        assert_ok!(ProductModule::add_authorized_user(RuntimeOrigin::root(), 1));
-        let mut vec = BoundedVec::try_from(Vec::from("other")).unwrap();
-        
-        assert_ok!(ProductModule::add_product(RuntimeOrigin::signed(1), vec, 4, 1 ));
+fn it_works_buy_product(){
+    minimal_test_ext().execute_with(||{
+        //balance transfer to owner account just for testing 
+        //bacause of existential deposit value 
+        assert_ok!(
+            <Test as pallet_product::Config>::Currency::set_balance(
+                mock::RuntimeOrigin::root(),
+                TEST_OWNER_ACCOUNT,
+                20000,
+                0u32.into(),
+            )
+        );
 
+        //adding authorized user
+        assert_ok!(ProductModule::add_authorized_user(RuntimeOrigin::root(), 1));
+
+        let buyer=2;
+     
+        //add a test product
+        assert_ok!(ProductModule::add_product(
+            RuntimeOrigin::signed(1), 
+            BoundedVec::try_from(Vec::from("other")).unwrap(), 
+            20u32.into())
+        );
+
+        //updating position
+        //sell_product is not allowed without position distribution
+        assert_ok!(
+            ProductModule::update_position(RuntimeOrigin::signed(1),
+            1, 
+            ProductPositionEnum::Distribution)
+        );
+        
+        //set balance of buyer for payment 
+        assert_ok!(
+            <Test as pallet_product::Config>::Currency::set_balance(
+                mock::RuntimeOrigin::root(),
+                buyer,
+                2000000,
+                0u32.into(),
+            )
+        );
+            
+        
         assert_ok!(ProductModule::buy_product(RuntimeOrigin::signed(2), 1));
-        let mut p: Product<Test> = ProductModule::get_product_info(1).unwrap();
-        assert_eq!(p.get_count(), 0);
-        assert_err!(ProductModule::buy_product(RuntimeOrigin::signed(2), 1), Error::<Test>::ProductFinished);
+
+        assert_eq!(
+            ProductModule::get_product_info(1).unwrap().get_owner(), 
+            buyer
+        );
     })
 }

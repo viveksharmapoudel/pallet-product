@@ -1,11 +1,17 @@
-use crate as pallet_product;
-use frame_support::traits::{ConstU16, ConstU64};
+use crate::{self as pallet_product, types::AccountIdOf};
+use frame_support::{traits::{ConstU16, ConstU64}, parameter_types};
 use frame_system as system;
-use sp_core::H256;
+
+pub const TEST_OWNER_ACCOUNT:u64=100;
+
+use sp_core::{H256, ConstU32};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+
+
+use pallet_balances;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -19,6 +25,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		ProductModule: pallet_product,
+		Balances: pallet_balances,
 	}
 );
 
@@ -40,7 +47,7 @@ impl system::Config for Test {
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -49,11 +56,51 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u64 = 500;
+}
+
+
 impl pallet_product::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+}
+
+impl pallet_balances::Config for Test {
+	type Balance = u64;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+	type WeightInfo = ();
+	type MaxLocks = ConstU32<10>;
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap()
+		.into()
 }
+
+pub fn minimal_test_ext() -> sp_io::TestExternalities {
+	use frame_support::traits::GenesisBuild;
+	// use hex_literal::hex;
+	let mut t = frame_system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
+	// let product_owner_account_hex = hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"];
+	// let product_owner_account =
+	// AccountIdOf::<Test>::decode(&mut &product_owner_account_hex[..]).unwrap();
+	pallet_product::GenesisConfig::<Test> {
+		product_owner_account:TEST_OWNER_ACCOUNT,
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	t.into()
+}
+
+
