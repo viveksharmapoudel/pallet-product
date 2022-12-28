@@ -69,18 +69,7 @@ pub mod pallet {
 		//even when new user is registered
 		NewAuthorizedUser(T::AccountId),
 
-		//event when new product is registered
-		NewProduct{
-			id : u128, 
-			product: Product<T>,
-		},
-
-		UpdatePosition{
-			id: u128,
-			product:Product<T>,
-		},
-
-		BuyProduct{
+		Product{
 			id: u128,
 			product:Product<T>,
 		},
@@ -92,13 +81,9 @@ pub mod pallet {
 
 		BadOrigin,
 
-		DeniedOperation,
-
 		AuthorizedUserExist,
 
 		ProductDonotExist,
-
-		ProductFinished,
 
 		NotReadyForRetailer,
 
@@ -106,10 +91,7 @@ pub mod pallet {
 
 		InsufficientBalance,
 
-
 		ServerAccountNotFound,
-
-		ItemSold,
 
 		NotInResaleList,
 
@@ -153,7 +135,7 @@ pub mod pallet {
 			<ProductCounter<T>>::set(Some(product_counter));
 			<Products<T>>::insert(product_counter,&p);
 			
-			Self::deposit_event(Event::NewProduct{
+			Self::deposit_event(Event::Product{
 				id: product_counter,
 				product: p,
 			});
@@ -176,7 +158,7 @@ pub mod pallet {
 			
 			p.set_position(position);
 			<Products<T>>::insert(id,&p);
-			Self::deposit_event(Event::UpdatePosition{
+			Self::deposit_event(Event::Product{
 				id:id,
 				product: p,
 			});
@@ -199,10 +181,10 @@ pub mod pallet {
 				Error::<T>::NotReadyForRetailer
 			);
 
-			//ensure not sold 
-			ensure!(!p.get_is_sold(), Error::<T>::ItemSold);
+			if(p.get_is_sold()&& !p.get_resale() ){
+				Err(Error::<T>::NotInResaleList);
+			}
 
-			
 			// check sender balance greater than min balance
 			ensure!(
 				<T as Config>::Currency::free_balance(&buyer) >
@@ -229,7 +211,7 @@ pub mod pallet {
 			p.set_is_sold(true);
 
 			<Products<T>>::insert(id,&p);
-			Self::deposit_event(Event::BuyProduct{
+			Self::deposit_event(Event::Product{
 				id:id,
 				product: p,
 			});
@@ -238,6 +220,31 @@ pub mod pallet {
 		}
 
 
+		#[pallet::call_index(4)]
+		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+		pub fn enable_resale(origin:OriginFor<T>,id: u128, price: BalanceOf<T>)-> DispatchResult{
+			let owner =ensure_signed(origin)?;
+
+			// check if product exists
+			let mut p:Product<T> =  Self::get_product_info(id).ok_or(Error::<T>::ProductDonotExist)?;
+
+			// validate owner
+			ensure!(owner== p.get_owner(), Error::<T>::BadOrigin);
+
+			// validate is sold
+			ensure!(p.get_is_sold(), Error::<T>::ProductIsNotSold);
+
+			// resale and price adjusted
+			p.set_resale(true);
+			p.set_price(price);
+			<Products<T>>::insert(id,&p);
+			Self::deposit_event(Event::Product{
+				id:id,
+				product: p,
+			});
+
+			Ok(())
+		}
 		
 
 	}

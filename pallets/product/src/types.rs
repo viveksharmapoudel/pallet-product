@@ -40,6 +40,8 @@ pub struct Product<T:Config>{
     // whether product is sold or not 
     is_sold: bool,
 
+    // start resale
+    resale: bool,
 
     //destination
     position: ProductPositionEnum,
@@ -47,13 +49,14 @@ pub struct Product<T:Config>{
 }
 
 impl<T:Config> Product<T> {
-    pub fn new(name: ProductName, price:BalanceOf<T>, owner: T::AccountId,  position: ProductPositionEnum, is_sold: bool)-> Self{
+    pub fn new(name: ProductName, price:BalanceOf<T>, owner: T::AccountId,  position: ProductPositionEnum)-> Self{
         Product::<T>{
             name,
             price,
             owner,
-            is_sold,
             position,
+            is_sold:false,
+            resale:false
         }
     }
 
@@ -67,6 +70,10 @@ impl<T:Config> Product<T> {
     pub fn set_is_sold(&mut self, sold:bool){self.is_sold=sold}
 
     pub fn get_price(&mut self)->BalanceOf<T>{return self.price}
+    pub fn set_price(&mut self, price: BalanceOf<T>){self.price= price}
+
+    pub fn get_resale(&mut self)->bool{return self.resale}
+    pub fn set_resale(&mut self, resale:bool){self.resale= resale}
 }
 
 impl<T: Config> core::fmt::Debug for Product<T> {
